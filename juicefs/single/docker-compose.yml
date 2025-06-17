@@ -1,0 +1,57 @@
+version: '3.8'
+services:
+  redis:
+    image: redis:6.2
+    container_name: redis
+    volumes:
+      - ./redis/data:/data
+    ports:
+      - "6379:6379"
+    configs:
+      - source: redis_config
+        target: /usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    restart: always
+    networks:
+      - juicefs-network
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2022-02-18T01-50-10Z
+    container_name: minio
+    volumes:
+      - ./minio/data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=root
+      - MINIO_ROOT_PASSWORD=12345678
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: always
+    networks:
+      - juicefs-network
+
+configs:
+  redis_config:
+    content: |
+      port 6379
+      requirepass 123456
+      dir /data
+      dbfilename dump.rdb
+      save 900 1
+      save 300 10
+      save 60 10000
+      appendonly yes
+      appendfilename appendonly.aof
+      appendfsync everysec
+      auto-aof-rewrite-percentage 100
+      auto-aof-rewrite-min-size 64mb
+
+networks:
+  juicefs-network:
+    driver: bridge
