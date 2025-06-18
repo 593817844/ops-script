@@ -1,0 +1,139 @@
+#暴露web端口到集群外部
+apiVersion: v1
+kind: Service
+metadata:
+  name: nacos-external
+  namespace: nacos
+  labels:
+    app: nacos
+spec:
+  type: NodePort
+  ports:
+    - port: 8848
+      name: server
+      targetPort: 8848
+      nodePort: 30088  # 可选：指定外部端口（30000-32767 范围内），若不指定，Kubernetes 会自动分配
+  selector:
+    app: nacos
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nacos-headless
+  namespace: nacos
+  labels:
+    app: nacos-headless
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: 8848
+      name: server
+      targetPort: 8848
+    - port: 9848
+      name: client-rpc
+      targetPort: 9848
+    - port: 9849
+      name: raft-rpc
+      targetPort: 9849
+    ## 兼容1.4.x版本的选举端口
+    - port: 7848
+      name: old-raft-rpc
+      targetPort: 7848
+  selector:
+    app: nacos
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nacos-cm
+  namespace: nacos
+data:
+  mysql.host: "192.168.100.101"
+  mysql.db.name: "nacos"
+  mysql.port: "3306"
+  mysql.user: "root"
+  mysql.password: "123456"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nacos
+  namespace: nacos
+spec:
+  serviceName: nacos-headless
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: nacos
+      annotations:
+        pod.alpha.kubernetes.io/initialized: "true"
+    spec:
+      containers:
+        - name: nacos
+          imagePullPolicy: Always
+          image: nacos-registry.cn-hangzhou.cr.aliyuncs.com/nacos/nacos-server:v2.5.0
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "500m"
+          ports:
+            - containerPort: 8848
+              name: client
+            - containerPort: 9848
+              name: client-rpc
+            - containerPort: 9849
+              name: raft-rpc
+            - containerPort: 7848
+              name: old-raft-rpc
+          env:
+            - name: NACOS_REPLICAS
+              value: "3"
+            - name: MYSQL_SERVICE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: nacos-cm
+                  key: mysql.host
+            - name: MYSQL_SERVICE_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: nacos-cm
+                  key: mysql.db.name
+            - name: MYSQL_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: nacos-cm
+                  key: mysql.port
+            - name: MYSQL_SERVICE_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: nacos-cm
+                  key: mysql.user
+            - name: MYSQL_SERVICE_PASSWORD
+              valueFrom:
+                configMapKeyRef:
+                  name: nacos-cm
+                  key: mysql.password
+            - name: SPRING_DATASOURCE_PLATFORM
+              value: "mysql"
+            - name: NACOS_SERVER_PORT
+              value: "8848"
+            - name: NACOS_APPLICATION_PORT
+              value: "8848"
+            - name: PREFER_HOST_MODE
+              value: "hostname"
+            - name: NACOS_SERVERS
+              value: "nacos-0.nacos-headless.nacos.svc.cluster.local:8848 nacos-1.nacos-headless.nacos.svc.cluster.local:8848 nacos-2.nacos-headless.nacos.svc.cluster.local:8848"
+            - name: NACOS_AUTH_ENABLE
+              value: 'true'
+            - name: NACOS_AUTH_TOKEN
+              value: UmFuZG9tVG9rZW5fU2VjcmV0XzQ1NjdFODlBOTBCQzEyMzQ1Njc4OUE=
+            - name: NACOS_AUTH_IDENTITY_KEY
+              value: serverIdentity_3x4y5z6w
+            - name: NACOS_AUTH_IDENTITY_VALUE
+              value: identityValue_p7q8r9t0
+  selector:
+    matchLabels:
+      app: nacos
