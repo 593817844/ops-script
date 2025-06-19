@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: juicefs-pvc
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      # 从 StorageClass 中申请 10GiB 存储容量
+      storage: 10Gi
+  storageClassName: juicefs-sc
