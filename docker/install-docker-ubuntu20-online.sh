@@ -12,3 +12,6 @@ apt install docker-ce docker-ce-cli containerd.io -y
 # docker-ce-cli：命令行工具，允许用户与 Docker 引擎交互。
 # containerd：底层容器运行时，负责容器的实际运行和管理。
 
+#安装docker-compose
+curl -L "https://github.whrstudio.top/https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
