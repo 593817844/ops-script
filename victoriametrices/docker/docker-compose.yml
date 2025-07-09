@@ -1,3 +1,9 @@
+# git clone https://github.com/VictoriaMetrics/VictoriaMetrics.git 
+# cd VictoriaMetrics
+# git fetch --tags
+# git checkout v1.120.0
+# 在这个版本下面拿相关的文件
+
 services:
   #  Metrics collector.
   #  It scrapes targets defined in --promscrape.config
