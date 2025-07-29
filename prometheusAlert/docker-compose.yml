@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  prometheus-alert:
+    image: feiyu563/prometheus-alert:v4.9.1
+    container_name: prometheus-alert
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./db:/app/db
+    environment:
+      - PA_LOGIN_USER=prometheusalert
+      - PA_LOGIN_PASSWORD=prometheusalert
+      - PA_TITLE=PrometheusAlert
+      - PA_OPEN_FEISHU=1
+      - PA_OPEN_DINGDING=1
+      - PA_OPEN_WEIXIN=1
+    restart: always
