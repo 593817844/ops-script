@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dev-litm
+  namespace: dev
+spec:
+  replicas: 1  # 您可以根据需要设置副本数
+  selector:
+    matchLabels:
+      app: dev-lisi
+  template:
+    metadata:
+      labels:
+        app: dev-lisi
+    spec:
+      containers:
+      - name: main
+        image: registry.cn-hongkong.aliyuncs.com/gezp/ubuntu-desktop:22.04-cu12.5.1
+        # command: ["/bin/bash", "-c"]
+        # args: 
+        #   - |
+        #     apt update && \
+        #     apt install -y openssh-server sudo curl wget vim git htop net-tools iputils-ping && \
+        #     useradd -m -s /bin/bash -G sudo dev && \
+        #     echo 'dev:devpassword' | chpasswd && \
+        #     echo 'dev ALL=(ALL:ALL) NOPASSWD:ALL' >> /etc/sudoers && \
+        #     service ssh start && \
+        #     echo "SSH service started, dev user created with sudo privileges" && \
+        #     tail -f /dev/null
+        env:
+        # 必须指定的环境变量
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: "all"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "all"
+        - name: OWNER
+          value: "lisi"  # 修改此处，和个人存储的目录名保持一样
+        - name: USER
+          value: "ubuntu"
+        - name: PASSWORD
+          value: "ubuntu"
+        - name: REMOTE_DESKTOP
+          value: "novnc"
+        volumeMounts:
+          - mountPath: /workspace # 修改此处
+            name: user-data-pvc
+            readOnly: false
+            subPathExpr: $(OWNER)
+      nodeSelector:
+        vgpu: "off"
+      runtimeClassName: nvidia 
+      volumes:
+        - name: user-data-pvc
+          persistentVolumeClaim:
+            claimName:  nfs-user-data
