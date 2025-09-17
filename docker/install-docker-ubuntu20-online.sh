@@ -1,3 +1,4 @@
+##具体可参考https://developer.aliyun.com/mirror/docker-ce?spm=a2c6h.13651102.0.0.57e31b110iCbia
 # 重新导入 GPG 密钥
 curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 # 更新源列表以指定签名密钥
