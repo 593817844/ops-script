@@ -1,0 +1,171 @@
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-storage           # 名字随意，但下面 PV 和 PVC 都要保持一致
+provisioner: kubernetes.io/no-provisioner   # 关键：静态卷专用，不动态创建
+volumeBindingMode: WaitForFirstConsumer     # 推荐：延迟绑定，等 Pod 调度后再绑卷，避免跨节点绑定失败
+reclaimPolicy: Retain                       # 可选，但这里写上更明确
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-pv-node01-nexus
+spec:
+  capacity:
+    storage: 1Ti
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain     # 关键：删除 PVC 后目录保留
+  storageClassName: local-storage
+  local:
+    path: /data/nexus                   # 节点上真实目录（提前 mkdir 并 chown 777 或合适权限）
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k8s-node01
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-nexus
+  namespace: infra                    # 改成你的 namespace
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Ti
+  storageClassName: local-storage       # 必须和上面一致
+  volumeName: local-pv-node01-nexus
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus
+  namespace: infra
+  labels:
+    app: nexus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nexus
+  template:
+    metadata:
+      labels:
+        app: nexus
+    spec:
+      containers:
+      - name: nexus
+        image: sonatype/nexus3:3.72.0
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+        ports:
+        - containerPort: 8081
+        - containerPort: 8082   # docker registry
+        #env:
+        #- name: NEXUS_CONTEXT
+        #  value: nexus
+        volumeMounts:
+        - name: nexus-data
+          mountPath: /nexus-data
+        # 存活探针 - 检查端口是否响应
+        livenessProbe:
+          tcpSocket:
+            port: 8081
+          initialDelaySeconds: 300
+          periodSeconds: 30
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        # 就绪探针 - 检查是否可以接收流量
+        readinessProbe:
+          tcpSocket:
+            port: 8081
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: nexus-data
+        persistentVolumeClaim:
+          claimName: pvc-nexus
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus
+  namespace: infra
+spec:
+  ports:
+  - port: 8081
+    targetPort: 8081
+    name: http
+  - port: 8082
+    targetPort: 8082
+    name: docker
+  selector:
+    app: nexus
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus-lb
+  namespace: infra
+  # 可选：如果你想强制使用某个地址池
+  # annotations:
+  #   metallb.universe.tf/address-pool: infra-pool
+spec:
+  type: LoadBalancer
+  # 如果你希望固定一个 IP（强烈建议固定，避免重启后变）
+  loadBalancerIP: 192.168.100.100        # ← 改成你想用的 IP，必须在 MetalLB 地址池里
+  ports:
+    - name: http
+      port: 8081
+      protocol: TCP
+      targetPort: 8081
+    - name: docker
+      port: 8082
+      protocol: TCP
+      targetPort: 8082
+  selector:
+    app: nexus
+
+---
+# ingress-nginx 绑定到指定节点，用主机网络的方式暴露80、443， 最终通过： http://nexus.test 访问
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nexus-ingress
+  namespace: infra
+  annotations:
+    # 设置客户端请求体最大大小，对于上传大型制品很重要
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    # 设置代理超时时间
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: nexus.test
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nexus
+            port:
+              number: 8081
