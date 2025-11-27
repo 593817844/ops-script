@@ -1,3 +1,4 @@
+mkdir -p /etc/containerd/certs.d/docker.io
 cat >> /etc/containerd/certs.d/docker.io/hosts.toml <<EOF
 server = "https://registry-1.docker.io"
 
