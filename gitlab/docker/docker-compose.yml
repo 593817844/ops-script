@@ -4,11 +4,14 @@ services:
     image: gitlab/gitlab-ce:17.5.3-ce.0
     container_name: gitlab
     restart: always
-    hostname: '10.100.10.6'
+    hostname: 'gitlab.test'
     environment:
       GITLAB_OMNIBUS_CONFIG: |
-        external_url 'http://10.100.100.101'
+        external_url 'http://gitlab.test:80'
         gitlab_rails['gitlab_shell_ssh_port'] = 2222
+        puma['worker_processes'] = 6         # 6个worker
+        puma['min_threads'] = 8               # 每个worker 8线程
+        puma['max_threads'] = 8               # 最大8线程
     ports:
       - '80:80'
       - '443:443'
